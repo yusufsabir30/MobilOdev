@@ -1,8 +1,9 @@
 import React, { useState } from "react";
-import { View, StyleSheet } from "react-native";
+import { View, StyleSheet, Alert } from "react-native";
 import { TextInput, Button, Text } from "react-native-paper";
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "../firebase";
+import { doc, getDoc } from "firebase/firestore";
+import { auth, db } from "../firebase";
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState("");
@@ -10,32 +11,35 @@ export default function LoginScreen({ navigation }) {
   const [error, setError] = useState("");
 
   const handleLogin = async () => {
-    console.log("Giriş Yap butonuna basıldı!"); // Bu satır tetikleniyor mu kontrol edin
-    if (!email || !password) {
-      setError("E-posta ve şifre alanları boş bırakılamaz.");
-      return;
-    }
-  
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
-      
-      console.log("Giriş başarılı:", user.email);
-      setError(""); // Hata mesajını temizleyin
-      navigation.navigate("Dashboard");
-      console.log("Navigation çalıştı.");
-    } catch (err) {
-      console.error("Hata Kodu:", err.code, "Hata Mesajı:", err.message);
-      if (err.code === "auth/user-not-found") {
-        setError("Kullanıcı bulunamadı. Lütfen bilgilerinizi kontrol edin.");
-      } else if (err.code === "auth/wrong-password") {
-        setError("Yanlış şifre girdiniz.");
-      } else if (err.code === "auth/invalid-email") {
-        setError("Geçersiz e-posta formatı.");
+
+      const userDocRef = doc(db, "users", user.uid);
+      const userDoc = await getDoc(userDocRef);
+
+      if (userDoc.exists()) {
+        const userRole = userDoc.data().role;
+
+        if (userRole === "admin") {
+          Alert.alert("Bilgi", "Admin paneline yönlendiriliyorsunuz.");
+          navigation.reset({
+            index: 0,
+            routes: [{ name: "AdminPanel" }],
+          });
+        } else {
+          Alert.alert("Bilgi", "Dashboard'a yönlendiriliyorsunuz.");
+          navigation.reset({
+            index: 0,
+            routes: [{ name: "Dashboard" }],
+          });
+        }
       } else {
-        setError("Giriş başarısız. Lütfen bilgilerinizi kontrol edin.");
+        setError("Kullanıcı rolü bulunamadı.");
       }
+    } catch (err) {
       console.error("Giriş hatası:", err.message);
+      setError("Giriş başarısız: " + err.message);
     }
   };
 
@@ -62,13 +66,13 @@ export default function LoginScreen({ navigation }) {
         style={styles.input}
         autoComplete="password"
       />
-      <Button mode="contained" onPress={() => alert("Buton çalışıyor!")} style={styles.button}>
+      <Button mode="contained" onPress={handleLogin} style={styles.button}>
         Giriş Yap
       </Button>
       <Button
-        mode="outlined"
-        onPress={() => navigation.navigate("Register")}
-        style={{ marginTop: 10 }}
+         mode="outlined"
+         onPress={() => navigation.navigate("Register")}
+         style={styles.registerButton}
       >
         Kayıt Ol
       </Button>
@@ -94,10 +98,18 @@ const styles = StyleSheet.create({
   },
   button: {
     marginTop: 10,
+    backgroundColor: "#6A1B9A", // Giriş Yap butonunun rengi
+    borderRadius: 5, // Kenar yuvarlaklığı
   },
   error: {
     color: "red",
     marginBottom: 15,
     textAlign: "center",
   },
+  registerButton: {
+    marginTop: 10,
+    backgroundColor: "#f5f5f5", // Giriş Yap butonunun rengi
+    borderRadius: 5, // Kenar yuvarlaklığı
+  }
 });
+
